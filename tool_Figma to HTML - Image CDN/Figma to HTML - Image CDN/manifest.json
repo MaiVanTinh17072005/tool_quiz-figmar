@@ -1,0 +1,20 @@
+{
+  "name": "Figma to HTML - Image CDN",
+  "id": "1623238216122328343",
+  "api": "1.0.0",
+  "main": "code.js",
+  "capabilities": [],
+  "enableProposedApi": false,
+  "documentAccess": "dynamic-page",
+  "editorType": [
+    "figma"
+  ],
+  "ui": "ui.html",
+  "networkAccess": {
+    "allowedDomains": [
+      "https://api.imgbb.com",
+      "https://i.ibb.co"
+    ],
+    "reasoning": "Plugin cần upload ảnh lên imgbb.com CDN API và nhận link ảnh trả về."
+  }
+}

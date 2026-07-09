@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 13px;
+    color: #333;
+    background: #f5f5f5;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  .header {
+    background: #18181b;
+    color: #fff;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .header h1 { font-size: 14px; font-weight: 600; letter-spacing: -0.2px; }
+  .header .badge {
+    background: #3b82f6; color: #fff; font-size: 10px;
+    padding: 2px 8px; border-radius: 10px; font-weight: 600;
+  }
+
+  .toolbar {
+    padding: 10px 16px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    background: #fff;
+    border-bottom: 1px solid #e5e5e5;
+    flex-shrink: 0;
+  }
+
+  button {
+    border: none; border-radius: 6px; padding: 8px 16px;
+    font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s;
+  }
+  button:hover { opacity: 0.9; }
+  button:active { transform: scale(0.98); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  .btn-primary { background: #3b82f6; color: #fff; }
+  .btn-secondary { background: #e5e5e5; color: #333; }
+  .btn-success { background: #22c55e; color: #fff; }
+
+  .status-bar {
+    padding: 6px 16px; font-size: 11px; color: #666;
+    background: #fafafa; border-bottom: 1px solid #eee;
+    flex-shrink: 0; display: flex; align-items: center; gap: 8px;
+  }
+  .status-bar .spinner {
+    width: 12px; height: 12px; border: 2px solid #ddd;
+    border-top-color: #3b82f6; border-radius: 50%;
+    animation: spin 0.6s linear infinite; display: none;
+  }
+  .status-bar.loading .spinner { display: block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .progress-container {
+    display: none; padding: 0 16px 8px; background: #fafafa; flex-shrink: 0;
+  }
+  .progress-container.visible { display: block; }
+  .progress-bar { height: 4px; background: #e5e5e5; border-radius: 2px; overflow: hidden; }
+  .progress-bar .fill {
+    height: 100%; background: #3b82f6; border-radius: 2px;
+    transition: width 0.3s; width: 0%;
+  }
+
+  .output-container {
+    flex: 1; overflow: hidden; display: flex; flex-direction: column; background: #fff;
+  }
+
+  .tabs {
+    display: flex; border-bottom: 1px solid #e5e5e5; background: #fafafa; flex-shrink: 0;
+  }
+  .tab {
+    padding: 8px 16px; font-size: 12px; font-weight: 500; color: #888;
+    cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s;
+  }
+  .tab:hover { color: #333; }
+  .tab.active { color: #3b82f6; border-bottom-color: #3b82f6; }
+
+  .tab-content { flex: 1; overflow: auto; display: none; }
+  .tab-content.active { display: block; }
+
+  .code-output {
+    padding: 12px 16px;
+    font-family: 'Fira Code', 'Consolas', 'Monaco', monospace;
+    font-size: 12px; line-height: 1.6;
+    white-space: pre-wrap; word-break: break-word;
+    color: #1e293b; min-height: 100%;
+  }
+
+  .preview-frame { width: 100%; height: 100%; border: none; background: #fff; }
+
+  .empty-state {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; height: 100%; color: #999; gap: 8px;
+    padding: 40px; text-align: center;
+  }
+  .empty-state .icon { font-size: 32px; opacity: 0.5; }
+  .empty-state p { font-size: 12px; max-width: 260px; line-height: 1.5; }
+
+  .log-area {
+    max-height: 80px; overflow-y: auto; padding: 4px 16px;
+    font-size: 10px; color: #999; background: #f0f0f0;
+    border-top: 1px solid #e5e5e5; flex-shrink: 0;
+    font-family: monospace; display: none;
+  }
+  .log-area.visible { display: block; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Figma to HTML</h1>
+  <span class="badge">Image CDN</span>
+</div>
+
+<div class="toolbar">
+  <button class="btn-primary" id="btnScan">Scan Selection</button>
+  <button class="btn-success" id="btnCopy" disabled>Copy HTML</button>
+  <button class="btn-secondary" id="btnCancel">Close</button>
+</div>
+
+<div class="status-bar" id="statusBar">
+  <div class="spinner"></div>
+  <span id="statusText">Select layers in Figma, then click "Scan Selection"</span>
+</div>
+
+<div class="progress-container" id="progressContainer">
+  <div class="progress-bar"><div class="fill" id="progressFill"></div></div>
+</div>
+
+<div class="output-container">
+  <div class="tabs" id="tabs">
+    <div class="tab active" data-tab="code">HTML + CSS</div>
+    <div class="tab" data-tab="preview">Preview</div>
+  </div>
+
+  <div class="tab-content active" id="tabCode">
+    <div class="empty-state" id="emptyState">
+      <div class="icon">&#60;/&#62;</div>
+      <p>Select one or more layers/frames in Figma and click <strong>Scan Selection</strong> to generate HTML + CSS code.</p>
+      <p style="font-size:11px;color:#bbb;">Images will be automatically uploaded to CDN.</p>
+    </div>
+    <pre class="code-output" id="codeOutput" style="display:none;"></pre>
+  </div>
+
+  <div class="tab-content" id="tabPreview">
+    <iframe class="preview-frame" id="previewFrame" sandbox="allow-same-origin"></iframe>
+  </div>
+</div>
+
+<div class="log-area" id="logArea"></div>
+
+<script>
+// ─── State ────────────────────────────────────────────
+var generatedHTML = '';
+
+// ─── DOM refs ─────────────────────────────────────────
+var btnScan = document.getElementById('btnScan');
+var btnCopy = document.getElementById('btnCopy');
+var btnCancel = document.getElementById('btnCancel');
+var statusBar = document.getElementById('statusBar');
+var statusText = document.getElementById('statusText');
+var progressContainer = document.getElementById('progressContainer');
+var progressFill = document.getElementById('progressFill');
+var emptyState = document.getElementById('emptyState');
+var codeOutput = document.getElementById('codeOutput');
+var previewFrame = document.getElementById('previewFrame');
+var logArea = document.getElementById('logArea');
+
+// ─── Log helper ───────────────────────────────────────
+function log(msg) {
+  console.log('[Plugin]', msg);
+  logArea.classList.add('visible');
+  logArea.textContent += msg + '\n';
+  logArea.scrollTop = logArea.scrollHeight;
+}
+
+// ─── Tabs ─────────────────────────────────────────────
+document.querySelectorAll('.tab').forEach(function(tab) {
+  tab.addEventListener('click', function() {
+    document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+    document.querySelectorAll('.tab-content').forEach(function(t) { t.classList.remove('active'); });
+    tab.classList.add('active');
+    var tabName = tab.getAttribute('data-tab');
+    var id = 'tab' + tabName.charAt(0).toUpperCase() + tabName.slice(1);
+    document.getElementById(id).classList.add('active');
+  });
+});
+
+// ─── Status helpers ───────────────────────────────────
+function setStatus(text, loading) {
+  statusText.textContent = text;
+  if (loading) {
+    statusBar.classList.add('loading');
+  } else {
+    statusBar.classList.remove('loading');
+  }
+}
+
+function setProgress(percent) {
+  if (percent >= 0) {
+    progressContainer.classList.add('visible');
+  } else {
+    progressContainer.classList.remove('visible');
+  }
+  progressFill.style.width = Math.min(100, Math.max(0, percent)) + '%';
+}
+
+// ─── Buttons ──────────────────────────────────────────
+btnScan.addEventListener('click', function() {
+  btnScan.disabled = true;
+  btnCopy.disabled = true;
+  logArea.textContent = '';
+  setStatus('Scanning selected layers...', true);
+  setProgress(0);
+  parent.postMessage({ pluginMessage: { type: 'scan-selection' } }, '*');
+});
+
+btnCopy.addEventListener('click', function() {
+  if (!generatedHTML) return;
+  var textarea = document.createElement('textarea');
+  textarea.value = generatedHTML;
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand('copy');
+  document.body.removeChild(textarea);
+  var orig = btnCopy.textContent;
+  btnCopy.textContent = 'Copied!';
+  setTimeout(function() { btnCopy.textContent = orig; }, 1500);
+});
+
+btnCancel.addEventListener('click', function() {
+  parent.postMessage({ pluginMessage: { type: 'cancel' } }, '*');
+});
+
+// ─── CDN Upload (imgbb.com) ───────────────────────────
+var CDN_API = 'https://api.imgbb.com/1/upload';
+var CDN_KEY = '1e711b6807272a41abf05f51701f6ba8';
+
+function uploadImageToCDN(base64Data, fileName) {
+  return new Promise(function(resolve, reject) {
+    log('Uploading "' + fileName + '" to CDN... (' + base64Data.length + ' chars)');
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', CDN_API + '?key=' + encodeURIComponent(CDN_KEY), true);
+
+    xhr.onload = function() {
+      log('CDN response status: ' + xhr.status);
+      log('CDN raw response: ' + xhr.responseText.substring(0, 500));
+
+      if (xhr.status < 200 || xhr.status >= 300) {
+        reject(new Error('HTTP ' + xhr.status + ': ' + xhr.responseText.substring(0, 200)));
+        return;
+      }
+
+      var result;
+      try {
+        result = JSON.parse(xhr.responseText);
+      } catch(e) {
+        reject(new Error('Invalid JSON: ' + xhr.responseText.substring(0, 200)));
+        return;
+      }
+
+      if (result.success && result.data) {
+        var url = result.data.display_url || result.data.url || '';
+        log('CDN OK! URL: ' + url);
+        resolve(url);
+      } else {
+        var errMsg = 'Upload failed';
+        if (result.error) {
+          errMsg = result.error.message || result.error.code || JSON.stringify(result.error);
+        }
+        log('CDN error: ' + errMsg);
+        reject(new Error(errMsg));
+      }
+    };
+
+    xhr.onerror = function() {
+      log('XHR network error for "' + fileName + '"');
+      reject(new Error('Network error'));
+    };
+
+    xhr.ontimeout = function() {
+      log('XHR timeout for "' + fileName + '"');
+      reject(new Error('Request timeout'));
+    };
+
+    xhr.timeout = 30000;
+
+    // Gửi dưới dạng FormData với field "image" chứa base64
+    var formData = new FormData();
+    formData.append('image', base64Data);
+    formData.append('name', fileName);
+
+    xhr.send(formData);
+  });
+}
+
+// ─── Collect image nodes from tree ────────────────────
+function collectImageNodes(node) {
+  var images = [];
+  if (node.isImage && node.imageBase64) {
+    images.push(node);
+  }
+  if (node.children) {
+    for (var i = 0; i < node.children.length; i++) {
+      var childImages = collectImageNodes(node.children[i]);
+      for (var j = 0; j < childImages.length; j++) {
+        images.push(childImages[j]);
+      }
+    }
+  }
+  return images;
+}
+
+// ─── Upload all images ────────────────────────────────
+function uploadAllImages(nodes) {
+  var allImages = [];
+  for (var n = 0; n < nodes.length; n++) {
+    var imgs = collectImageNodes(nodes[n]);
+    for (var j = 0; j < imgs.length; j++) {
+      allImages.push(imgs[j]);
+    }
+  }
+
+  log('Total images to upload: ' + allImages.length);
+
+  if (allImages.length === 0) {
+    return Promise.resolve();
+  }
+
+  setStatus('Uploading ' + allImages.length + ' image(s) to CDN...', true);
+
+  // Upload sequentially
+  var index = 0;
+  function uploadNext() {
+    if (index >= allImages.length) {
+      setProgress(100);
+      return Promise.resolve();
+    }
+
+    var img = allImages[index];
+    setStatus('Uploading image ' + (index + 1) + '/' + allImages.length + ': ' + img.name + '...', true);
+    setProgress(40 + (index / allImages.length) * 50);
+
+    return uploadImageToCDN(img.imageBase64, img.name)
+      .then(function(url) {
+        img.cdnUrl = url;
+        delete img.imageBase64;
+        index++;
+        return uploadNext();
+      })
+      .catch(function(e) {
+        log('Failed to upload: ' + img.name + ' - ' + e.message);
+        img.cdnUrl = '';
+        img.uploadError = e.message;
+        index++;
+        return uploadNext();
+      });
+  }
+
+  return uploadNext();
+}
+
+// ─── HTML/CSS Generator ───────────────────────────────
+function sanitizeClassName(name) {
+  return name
+    .replace(/[^a-zA-Z0-9_-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .toLowerCase() || 'element';
+}
+
+function generateUniqueClass(name, usedClasses) {
+  var base = sanitizeClassName(name);
+  if (!base) base = 'element';
+  var className = base;
+  var counter = 1;
+  while (usedClasses.has(className)) {
+    className = base + '-' + counter;
+    counter++;
+  }
+  usedClasses.add(className);
+  return className;
+}
+
+function buildCSS(node, parentIsAutoLayout) {
+  var styles = {};
+
+  // Dimensions
+  if (parentIsAutoLayout) {
+    if (node.layoutSizingHorizontal === 'FILL') {
+      styles['flex'] = '1';
+    } else {
+      styles['width'] = node.width + 'px';
+    }
+    if (node.layoutSizingVertical !== 'FILL') {
+      styles['height'] = node.height + 'px';
+    }
+  } else {
+    styles['width'] = node.width + 'px';
+    styles['height'] = node.height + 'px';
+  }
+
+  // Flexbox
+  if (node.display === 'flex') {
+    styles['display'] = 'flex';
+    if (node.flexDirection) styles['flex-direction'] = node.flexDirection;
+    if (node.gap) styles['gap'] = node.gap + 'px';
+    if (node.justifyContent && node.justifyContent !== 'flex-start') {
+      styles['justify-content'] = node.justifyContent;
+    }
+    if (node.alignItems && node.alignItems !== 'flex-start') {
+      styles['align-items'] = node.alignItems;
+    }
+    if (node.flexWrap) styles['flex-wrap'] = node.flexWrap;
+  }
+
+  // Padding
+  if (node.padding) {
+    var p = node.padding;
+    if (p.top || p.right || p.bottom || p.left) {
+      if (p.top === p.right && p.right === p.bottom && p.bottom === p.left) {
+        styles['padding'] = p.top + 'px';
+      } else {
+        styles['padding'] = p.top + 'px ' + p.right + 'px ' + p.bottom + 'px ' + p.left + 'px';
+      }
+    }
+  }
+
+  // Background
+  if (node.backgroundColor) {
+    styles['background-color'] = node.backgroundColor;
+  }
+
+  // Border radius
+  if (node.borderRadius) {
+    if (Array.isArray(node.borderRadius)) {
+      styles['border-radius'] = node.borderRadius.map(function(r) { return r + 'px'; }).join(' ');
+    } else {
+      styles['border-radius'] = node.borderRadius + 'px';
+    }
+  }
+
+  // Border
+  if (node.border) {
+    styles['border'] = node.border.width + 'px solid ' + node.border.color;
+  }
+
+  // Box shadow
+  if (node.boxShadow) {
+    styles['box-shadow'] = node.boxShadow;
+  }
+
+  // Opacity
+  if (node.opacity !== undefined && node.opacity < 1) {
+    styles['opacity'] = String(node.opacity);
+  }
+
+  // Overflow
+  if (node.overflow) {
+    styles['overflow'] = node.overflow;
+  }
+
+  // Text styles
+  if (node.type === 'TEXT') {
+    if (node.fontFamily) styles['font-family'] = "'" + node.fontFamily + "', sans-serif";
+    if (node.fontSize) styles['font-size'] = node.fontSize + 'px';
+    if (node.fontWeight && node.fontWeight !== 400) styles['font-weight'] = String(node.fontWeight);
+    if (node.textColor) styles['color'] = node.textColor;
+    if (node.lineHeight) styles['line-height'] = node.lineHeight;
+    if (node.letterSpacing) styles['letter-spacing'] = node.letterSpacing + 'px';
+    if (node.textAlign && node.textAlign !== 'left') styles['text-align'] = node.textAlign;
+    if (node.textDecoration) styles['text-decoration'] = node.textDecoration;
+  }
+
+  // Image sizing
+  if (node.isImage) {
+    styles['display'] = 'block';
+    styles['object-fit'] = 'cover';
+  }
+
+  return styles;
+}
+
+function stylesToString(styles, indent) {
+  var lines = [];
+  var keys = Object.keys(styles);
+  for (var i = 0; i < keys.length; i++) {
+    lines.push(indent + '  ' + keys[i] + ': ' + styles[keys[i]] + ';');
+  }
+  return lines.join('\n');
+}
+
+function escapeHtml(text) {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function generateCode(nodes) {
+  var usedClasses = new Set();
+  var cssRules = [];
+  var htmlLines = [];
+
+  function processNode(node, indent, parentIsAutoLayout, isRoot) {
+    var className = generateUniqueClass(node.name, usedClasses);
+    var styles = buildCSS(node, parentIsAutoLayout);
+    var isAutoLayout = node.display === 'flex';
+
+    // Positioning
+    if (isRoot) {
+      styles['position'] = 'relative';
+    } else if (!parentIsAutoLayout) {
+      styles['position'] = 'absolute';
+      styles['left'] = node.x + 'px';
+      styles['top'] = node.y + 'px';
+    }
+
+    // Non-auto-layout parent with children needs position relative
+    if (!isAutoLayout && node.children && node.children.length > 0) {
+      styles['position'] = isRoot ? 'relative' : (parentIsAutoLayout ? 'relative' : 'absolute');
+      if (!parentIsAutoLayout && !isRoot) {
+        styles['left'] = node.x + 'px';
+        styles['top'] = node.y + 'px';
+      }
+    }
+
+    var cssStr = stylesToString(styles, '');
+    if (cssStr.trim()) {
+      cssRules.push('.' + className + ' {\n' + cssStr + '\n}');
+    }
+
+    // TEXT
+    if (node.type === 'TEXT') {
+      htmlLines.push(indent + '<p class="' + className + '">' + escapeHtml(node.text || '') + '</p>');
+      return;
+    }
+
+    // IMAGE — chỉ dùng CDN URL, không dùng base64
+    if (node.isImage) {
+      var src = node.cdnUrl || '';
+      var alt = escapeHtml(node.name);
+      if (src) {
+        htmlLines.push(indent + '<img class="' + className + '" src="' + src + '" alt="' + alt + '" />');
+      } else {
+        htmlLines.push(indent + '<!-- Image upload failed: ' + alt + ' -->');
+        htmlLines.push(indent + '<img class="' + className + '" src="" alt="' + alt + '" />');
+      }
+      return;
+    }
+
+    // Container
+    var hasChildren = node.children && node.children.length > 0;
+    if (!hasChildren) {
+      htmlLines.push(indent + '<div class="' + className + '"></div>');
+      return;
+    }
+
+    htmlLines.push(indent + '<div class="' + className + '">');
+    for (var i = 0; i < node.children.length; i++) {
+      processNode(node.children[i], indent + '  ', isAutoLayout, false);
+    }
+    htmlLines.push(indent + '</div>');
+  }
+
+  for (var i = 0; i < nodes.length; i++) {
+    processNode(nodes[i], '    ', false, true);
+  }
+
+  var cssBlock = cssRules.map(function(r) {
+    return '    ' + r.split('\n').join('\n    ');
+  }).join('\n\n');
+
+  var fullHTML = '<!DOCTYPE html>\n' +
+    '<html lang="en">\n' +
+    '<head>\n' +
+    '  <meta charset="UTF-8">\n' +
+    '  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n' +
+    '  <title>Figma Export</title>\n' +
+    '  <style>\n' +
+    '    * { margin: 0; padding: 0; box-sizing: border-box; }\n\n' +
+    cssBlock + '\n' +
+    '  </style>\n' +
+    '</head>\n' +
+    '<body>\n' +
+    '  <div class="container">\n' +
+    htmlLines.join('\n') + '\n' +
+    '  </div>\n' +
+    '</body>\n' +
+    '</html>';
+
+  return fullHTML;
+}
+
+// ─── Handle messages from plugin ──────────────────────
+window.onmessage = function(event) {
+  var msg = event.data.pluginMessage;
+  if (!msg) return;
+
+  if (msg.type === 'log') {
+    log(msg.message);
+    return;
+  }
+
+  if (msg.type === 'error') {
+    setStatus(msg.message, false);
+    setProgress(-1);
+    btnScan.disabled = false;
+    return;
+  }
+
+  if (msg.type === 'scan-start') {
+    setStatus('Scanning ' + msg.count + ' layer(s)...', true);
+    setProgress(5);
+    return;
+  }
+
+  if (msg.type === 'scan-progress') {
+    setStatus('Scanning: ' + msg.name + ' (' + msg.current + '/' + msg.total + ')...', true);
+    setProgress(5 + (msg.current / msg.total) * 35);
+    return;
+  }
+
+  if (msg.type === 'scan-complete') {
+    setStatus('Scan complete. Uploading images to CDN...', true);
+    setProgress(40);
+
+    log('Received scan data. Processing...');
+
+    uploadAllImages(msg.nodes)
+      .then(function() {
+        setStatus('Generating HTML + CSS...', true);
+        setProgress(90);
+
+        generatedHTML = generateCode(msg.nodes);
+
+        emptyState.style.display = 'none';
+        codeOutput.style.display = 'block';
+        codeOutput.textContent = generatedHTML;
+
+        previewFrame.srcdoc = generatedHTML;
+
+        setStatus('Done! HTML + CSS generated successfully.', false);
+        setProgress(-1);
+        btnCopy.disabled = false;
+        btnScan.disabled = false;
+
+        log('Done! Generated ' + generatedHTML.length + ' chars of HTML.');
+      })
+      .catch(function(e) {
+        setStatus('Error: ' + e.message, false);
+        setProgress(-1);
+        btnScan.disabled = false;
+        log('Error: ' + e.message);
+      });
+    return;
+  }
+};
+</script>
+</body>
+</html>

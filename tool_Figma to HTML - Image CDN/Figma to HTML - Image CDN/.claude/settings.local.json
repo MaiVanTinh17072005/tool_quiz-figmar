@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run:*)",
+      "Bash(npm install:*)",
+      "Bash(npx tsc:*)",
+      "WebSearch",
+      "WebFetch(domain:api.imgbb.com)"
+    ]
+  }
+}
